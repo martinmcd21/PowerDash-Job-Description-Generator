@@ -5,7 +5,30 @@ from typing import Dict, List
 from datetime import date
 
 from openai import OpenAI
+# utils/generation.py (near the top)
+import os
+import re
+import textwrap
+from typing import Dict, List
+from datetime import date
 
+from openai import OpenAI
+
+# --- read key from env OR Streamlit Secrets ---
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+if not OPENAI_API_KEY:
+    try:
+        import streamlit as st
+        OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
+    except Exception:
+        OPENAI_API_KEY = None
+
+if not OPENAI_API_KEY:
+    raise RuntimeError(
+        "OPENAI_API_KEY not found. Set it in Streamlit Secrets or as an environment variable."
+    )
+
+client = OpenAI(api_key=OPENAI_API_KEY)
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 BASE_SYSTEM_PROMPT = (
