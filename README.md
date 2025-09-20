@@ -1,1 +1,0 @@
-# PowerDash-Job-Description-Generator
