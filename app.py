@@ -3,7 +3,8 @@ import io
 from typing import List, Dict
 
 import streamlit as st
-from dotenv import load_dotenv import streamlit as st, os
+from dotenv import load_dotenv
+import streamlit as st, os
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY", "")
 
 from utils.generation import generate_job_description
