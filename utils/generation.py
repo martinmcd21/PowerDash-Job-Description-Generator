@@ -1,26 +1,11 @@
 import os
 import re
 import textwrap
+from functools import lru_cache
 from typing import Dict, List
 from datetime import date
 
 from openai import OpenAI
-
-# --- Read API key from environment or Streamlit Secrets ---
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-if not OPENAI_API_KEY:
-    try:
-        import streamlit as st
-        OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY")
-    except Exception:
-        OPENAI_API_KEY = None
-
-if not OPENAI_API_KEY:
-    raise RuntimeError(
-        "OPENAI_API_KEY not found. Set it in Streamlit Secrets or as an environment variable."
-    )
-
-client = OpenAI(api_key=OPENAI_API_KEY)
 
 BASE_SYSTEM_PROMPT = (
     "You are an expert HR copywriter who creates inclusive, clear, and legally aware Job Descriptions. "
@@ -47,12 +32,26 @@ EEO_DEFAULT = {
     "Australia": "We are an equal opportunity employer committed to diversity and inclusion.",
 }
 
-
 def _slugify(text: str) -> str:
     text = text.lower().strip()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return re.sub(r"-+", "-", text).strip("-") or "job-description"
 
+@lru_cache(maxsize=1)
+def _get_client() -> OpenAI:
+    """Create the OpenAI client, reading the key from env or Streamlit secrets."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        try:
+            import streamlit as st  # imported lazily so it exists at runtime
+            api_key = st.secrets.get("OPENAI_API_KEY")
+        except Exception:
+            api_key = None
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY not found. Add it in Streamlit Secrets or as an environment variable."
+        )
+    return OpenAI(api_key=api_key)
 
 def _compose_prompt(inputs: Dict) -> List[Dict[str, str]]:
     brief_mode = not bool(inputs.get("existing_jd"))
@@ -133,7 +132,6 @@ def _compose_prompt(inputs: Dict) -> List[Dict[str, str]]:
         Output sections in this order where applicable: {', '.join(SECTION_ORDER)}.
         Keep bullet points concise (max ~12 words each). Avoid redundant phrasing.
         """
-        # Attempt to infer title from the draft
         first_line = (draft or "").strip().splitlines()[0] if draft else "Job Description"
         title_for_slug = first_line[:80]
 
@@ -141,11 +139,10 @@ def _compose_prompt(inputs: Dict) -> List[Dict[str, str]]:
         {"role": "system", "content": BASE_SYSTEM_PROMPT},
         {"role": "user", "content": textwrap.dedent(user_content).strip()},
     ]
-
     return messages, title_for_slug
 
-
 def generate_job_description(inputs: Dict, model: str, temperature: float = 0.4) -> Dict:
+    client = _get_client()  # <-- create/read key at call-time
     messages, title_for_slug = _compose_prompt(inputs)
 
     completion = client.chat.completions.create(
@@ -153,14 +150,12 @@ def generate_job_description(inputs: Dict, model: str, temperature: float = 0.4)
         temperature=temperature,
         messages=messages,
     )
-
     content = completion.choices[0].message.content.strip()
 
-    # Split into sections by headings (### or **bold** headings tolerated)
+    # Parse sections
     sections = {}
     current = None
-    lines = content.splitlines()
-    for ln in lines:
+    for ln in content.splitlines():
         h = ln.strip().lstrip("# ")
         if any(h.lower().startswith(s.lower()) for s in SECTION_ORDER):
             current = next((s for s in SECTION_ORDER if h.lower().startswith(s.lower())), None)
@@ -171,14 +166,14 @@ def generate_job_description(inputs: Dict, model: str, temperature: float = 0.4)
                 sections[current] = []
             sections[current].append(ln)
 
-    # Ensure EEO present
+    # Ensure EEO
     jur = inputs.get("jurisdiction", "UK")
     if "Equal Opportunities" not in sections:
         sections["Equal Opportunities"] = [EEO_DEFAULT.get(jur, EEO_DEFAULT["Global"]) + "\n"]
 
     title = inputs.get("role_title") or title_for_slug or "Job Description"
 
-    # Build simple HTML preview
+    # Simple HTML preview
     html_parts = [
         f"<h2 style='margin-bottom:0'>{title}</h2>",
         f"<div class='muted' style='margin:0 0 .75rem 0'>{inputs.get('location','') or ''}</div>",
@@ -188,21 +183,14 @@ def generate_job_description(inputs: Dict, model: str, temperature: float = 0.4)
             body = "\n".join(sections[sec]).strip()
             if not body:
                 continue
-            # Convert bullet-like lines
             body_html = (
-                "<ul>"
-                + "".join(
-                    [f"<li>{line.strip('- ').strip()}</li>" for line in body.split('\n') if line.strip()]
-                )
-                + "</ul>"
-                if "\n" in body
-                else f"<p>{body}</p>"
+                "<ul>" + "".join(f"<li>{line.strip('- ').strip()}</li>" for line in body.split("\n") if line.strip()) + "</ul>"
+                if "\n" in body else f"<p>{body}</p>"
             )
             html_parts.append(f"<div class='section-title'>{sec}</div>")
             html_parts.append(body_html)
 
     html_preview = "\n".join(html_parts)
-
     return {
         "title": title,
         "slug": _slugify(f"{title}-{date.today().isoformat()}"),
