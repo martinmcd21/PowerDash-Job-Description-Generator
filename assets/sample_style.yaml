@@ -1,0 +1,11 @@
+# Example house-style snippets you can paste into the app's "House Guidance"
+language: UK English
+spellings:
+  - organisation
+  - programme
+rules:
+  bullets_max_words: 12
+  avoid: ["synergy", "rockstar", "ninja"]
+  prefer: ["clear", "concise", "inclusive"]
+notes: |
+  Use people-first language. Avoid gendered terms.
