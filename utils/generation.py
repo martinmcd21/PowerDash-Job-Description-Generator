@@ -5,16 +5,8 @@ from typing import Dict, List
 from datetime import date
 
 from openai import OpenAI
-# utils/generation.py (near the top)
-import os
-import re
-import textwrap
-from typing import Dict, List
-from datetime import date
 
-from openai import OpenAI
-
-# --- read key from env OR Streamlit Secrets ---
+# --- Read API key from environment or Streamlit Secrets ---
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if not OPENAI_API_KEY:
     try:
@@ -29,7 +21,6 @@ if not OPENAI_API_KEY:
     )
 
 client = OpenAI(api_key=OPENAI_API_KEY)
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 BASE_SYSTEM_PROMPT = (
     "You are an expert HR copywriter who creates inclusive, clear, and legally aware Job Descriptions. "
@@ -52,7 +43,7 @@ EEO_DEFAULT = {
     "UK": "We are an equal opportunities employer. We welcome applications from all suitably qualified individuals regardless of their background.",
     "USA": "We are an Equal Opportunity Employer, including disability and protected veterans, and we consider qualified applicants with criminal histories, consistent with applicable law.",
     "EU": "We are an equal opportunity employer committed to diversity and inclusion in the workplace.",
-    "Canada": "We are an equal opportunity employer committed to inclusive, barrier‑free recruitment and selection processes.",
+    "Canada": "We are an equal opportunity employer committed to inclusive, barrier-free recruitment and selection processes.",
     "Australia": "We are an equal opportunity employer committed to diversity and inclusion.",
 }
 
@@ -198,16 +189,23 @@ def generate_job_description(inputs: Dict, model: str, temperature: float = 0.4)
             if not body:
                 continue
             # Convert bullet-like lines
-            body_html = "<ul>" + "".join([f"<li>{line.strip('- ').strip()}</li>" for line in body.split('\n') if line.strip()]) + "</ul>" if "\n" in body else f"<p>{body}</p>"
+            body_html = (
+                "<ul>"
+                + "".join(
+                    [f"<li>{line.strip('- ').strip()}</li>" for line in body.split('\n') if line.strip()]
+                )
+                + "</ul>"
+                if "\n" in body
+                else f"<p>{body}</p>"
+            )
             html_parts.append(f"<div class='section-title'>{sec}</div>")
             html_parts.append(body_html)
 
     html_preview = "\n".join(html_parts)
 
-    from datetime import date as _d
     return {
         "title": title,
-        "slug": _slugify(f"{title}-{_d.today().isoformat()}") ,
+        "slug": _slugify(f"{title}-{date.today().isoformat()}"),
         "sections": sections,
         "html_preview": html_preview,
     }
